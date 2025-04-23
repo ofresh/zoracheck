@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zora Token Allocation Checker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+    <h1 class="text-2xl font-bold text-center mb-4">Zora Token Allocation</h1>
+    <div class="mb-4">
+      <input
+        id="addressInput"
+        type="text"
+        placeholder="Enter Ethereum address (0x...)"
+        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+    <button
+      id="checkButton"
+      class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+      onclick="checkAllocation()"
+    >
+      Check Allocation
+    </button>
+    <div id="result" class="mt-4 text-center"></div>
+    <div class="mt-6 text-center text-gray-600">
+      Created by <a href="https://x.com/OFreshableETH" target="_blank" class="text-blue-500 hover:underline">@OFreshableETH</a>
+    </div>
+  </div>
+
+  <script>
+    // Адреса смарт-контракту та ABI
+    const contractAddress = "0xYOUR_CONTRACT_ADDRESS"; // Замініть на адресу вашого контракту
+    const contractABI = [
+      {
+        "inputs": [{"internalType":"address","name":"account","type":"address"}],
+        "name": "allocations",
+        "outputs": [{"internalType":"uint256","name":"","type":"uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ];
+
+    // Провайдер (Base Mainnet через Infura)
+    const provider = new ethers.providers.JsonRpcProvider("https://base.llamarpc.com"); // Замініть YOUR_INFURA_API_KEY
+    const contract = new ethers.Contract(contractAddress, contractABI, provider);
+
+    async function checkAllocation() {
+      const addressInput = document.getElementById("addressInput").value;
+      const resultDiv = document.getElementById("result");
+      resultDiv.innerHTML = "Checking...";
+
+      try {
+        // Перевірка валідності адреси
+        if (!ethers.utils.isAddress(addressInput)) {
+          resultDiv.innerHTML = '<span class="text-red-500">Invalid Ethereum address!</span>';
+          return;
+        }
+
+        // Виклик функції allocations
+        const allocation = await contract.allocations(addressInput);
+        const tokens = ethers.utils.formatUnits(allocation, 18); // Конвертація з wei в токени (18 decimals)
+
+        resultDiv.innerHTML = `<span class="text-green-600">Allocation: ${tokens} ZORA tokens</span>`;
+      } catch (error) {
+        console.error(error);
+        resultDiv.innerHTML = '<span class="text-red-500">Error fetching allocation. Check console for details.</span>';
+      }
+    }
+
+    // Дозволити виклик функції при натисканні Enter
+    document.getElementById("addressInput").addEventListener("keypress", function(event) {
+      if (event.key === "Enter") {
+        checkAllocation();
+      }
+    });
+  </script>
+</body>
+</html>
