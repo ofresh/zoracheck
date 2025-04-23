@@ -19,6 +19,9 @@
       <button id="bulkTab" class="flex-1 py-2 px-4 text-center font-semibold border-b-2 border-transparent text-gray-500 hover:text-blue-500">
         Bulk Check
       </button>
+      <button id="claimTab" class="flex-1 py-2 px-4 text-center font-semibold border-b-2 border-transparent text-gray-500 hover:text-blue-500">
+        Claim
+      </button>
     </div>
 
     <!-- Вкладка Single Check -->
@@ -63,6 +66,37 @@
       <div id="bulkResult" class="mt-4 text-left overflow-x-auto"></div>
     </div>
 
+    <!-- Вкладка Claim -->
+    <div id="claimCheck" class="tab-content hidden">
+      <div class="mb-4">
+        <button
+          id="connectWalletButton"
+          class="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600"
+          onclick="connectWallet()"
+        >
+          Connect Wallet
+        </button>
+        <div id="walletStatus" class="mt-2 text-center text-gray-600"></div>
+      </div>
+      <div class="mb-4">
+        <input
+          id="claimToInput"
+          type="text"
+          placeholder="Enter address to claim to (0x...)"
+          class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <button
+        id="claimButton"
+        class="w-full bg-purple-500 text-white p-2 rounded hover:bg-purple-600"
+        onclick="claimTokens()"
+        disabled
+      >
+        Claim Tokens
+      </button>
+      <div id="claimResult" class="mt-4 text-center"></div>
+    </div>
+
     <div class="mt-6 text-center text-gray-600">
       Created by <a href="https://x.com/OFreshableETH" target="_blank" class="text-blue-500 hover:underline">@OFreshableETH</a>
     </div>
@@ -84,6 +118,13 @@
         "name": "token",
         "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [{"internalType":"address","name":"_claimTo","type":"address"}],
+        "name": "claim",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       }
     ];
@@ -121,16 +162,21 @@
     // Логіка вкладок
     const singleTab = document.getElementById("singleTab");
     const bulkTab = document.getElementById("bulkTab");
+    const claimTab = document.getElementById("claimTab");
     const singleCheck = document.getElementById("singleCheck");
     const bulkCheck = document.getElementById("bulkCheck");
+    const claimCheck = document.getElementById("claimCheck");
 
     singleTab.addEventListener("click", () => {
       singleTab.classList.add("border-blue-500", "text-blue-500");
       singleTab.classList.remove("border-transparent", "text-gray-500");
       bulkTab.classList.remove("border-blue-500", "text-blue-500");
       bulkTab.classList.add("border-transparent", "text-gray-500");
+      claimTab.classList.remove("border-blue-500", "text-blue-500");
+      claimTab.classList.add("border-transparent", "text-gray-500");
       singleCheck.classList.remove("hidden");
       bulkCheck.classList.add("hidden");
+      claimCheck.classList.add("hidden");
     });
 
     bulkTab.addEventListener("click", () => {
@@ -138,8 +184,23 @@
       bulkTab.classList.remove("border-transparent", "text-gray-500");
       singleTab.classList.remove("border-blue-500", "text-blue-500");
       singleTab.classList.add("border-transparent", "text-gray-500");
+      claimTab.classList.remove("border-blue-500", "text-blue-500");
+      claimTab.classList.add("border-transparent", "text-gray-500");
       bulkCheck.classList.remove("hidden");
       singleCheck.classList.add("hidden");
+      claimCheck.classList.add("hidden");
+    });
+
+    claimTab.addEventListener("click", () => {
+      claimTab.classList.add("border-blue-500", "text-blue-500");
+      claimTab.classList.remove("border-transparent", "text-gray-500");
+      singleTab.classList.remove("border-blue-500", "text-blue-500");
+      singleTab.classList.add("border-transparent", "text-gray-500");
+      bulkTab.classList.remove("border-blue-500", "text-blue-500");
+      bulkTab.classList.add("border-transparent", "text-gray-500");
+      claimCheck.classList.remove("hidden");
+      singleCheck.classList.add("hidden");
+      bulkCheck.classList.add("hidden");
     });
 
     // Функція для перевірки однієї адреси
@@ -157,7 +218,7 @@
 
         // Виклик функції allocations
         const allocation = await contract.allocations(addressInput);
-        const tokens = ethers.utils.formatUnits(allocation, decimals); // Використовуємо отримані decimals
+        const tokens = ethers.utils.formatUnits(allocation, decimals);
 
         resultDiv.innerHTML = `<span class="text-green-600">Allocation: ${tokens} ZORA tokens</span>`;
       } catch (error) {
@@ -212,6 +273,106 @@
       }
     }
 
+    // Логіка для підключення гаманця та виклику claim
+    let signer = null;
+    let connectedContract = null;
+    const BASE_CHAIN_ID = 8453; // Base Mainnet chainId
+
+    async function connectWallet() {
+      const walletStatus = document.getElementById("walletStatus");
+      const claimButton = document.getElementById("claimButton");
+      const claimResult = document.getElementById("claimResult");
+
+      if (typeof window.ethereum === "undefined") {
+        walletStatus.innerHTML = '<span class="text-red-500">Please install MetaMask!</span>';
+        return;
+      }
+
+      try {
+        // Запит на підключення гаманця
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const account = accounts[0];
+        walletStatus.innerHTML = `Connected: ${account.slice(0, 6)}...${account.slice(-4)}`;
+
+        // Перевірка та переключення на Base Mainnet
+        const currentChainId = await window.ethereum.request({ method: "eth_chainId" });
+        if (parseInt(currentChainId, 16) !== BASE_CHAIN_ID) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: `0x${BASE_CHAIN_ID.toString(16)}` }],
+            });
+          } catch (switchError) {
+            // Якщо мережа Base не додана, додаємо її
+            if (switchError.code === 4902) {
+              await window.ethereum.request({
+                method: "wallet_addEthereumChain",
+                params: [
+                  {
+                    chainId: `0x${BASE_CHAIN_ID.toString(16)}`,
+                    chainName: "Base Mainnet",
+                    rpcUrls: ["https://base-mainnet.infura.io/v3/6203eb5601804c44b3332458a72be2fe"],
+                    nativeCurrency: {
+                      name: "ETH",
+                      symbol: "ETH",
+                      decimals: 18,
+                    },
+                    blockExplorerUrls: ["https://basescan.org"],
+                  },
+                ],
+              });
+            } else {
+              throw switchError;
+            }
+          }
+        }
+
+        // Налаштування провайдера та signer
+        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+        signer = web3Provider.getSigner();
+        connectedContract = new ethers.Contract(contractAddress, contractABI, signer);
+
+        // Активуємо кнопку Claim
+        claimButton.disabled = false;
+        claimResult.innerHTML = "";
+      } catch (error) {
+        console.error(error);
+        walletStatus.innerHTML = '<span class="text-red-500">Error connecting wallet. Check console for details.</span>';
+      }
+    }
+
+    async function claimTokens() {
+      const claimToInput = document.getElementById("claimToInput").value;
+      const claimResult = document.getElementById("claimResult");
+
+      if (!signer || !connectedContract) {
+        claimResult.innerHTML = '<span class="text-red-500">Please connect your wallet first!</span>';
+        return;
+      }
+
+      if (!ethers.utils.isAddress(claimToInput)) {
+        claimResult.innerHTML = '<span class="text-red-500">Invalid claimTo address!</span>';
+        return;
+      }
+
+      claimResult.innerHTML = "Processing claim...";
+
+      try {
+        // Виклик функції claim
+        const tx = await connectedContract.claim(claimToInput);
+        await tx.wait();
+
+        claimResult.innerHTML = `<span class="text-green-600">Claim successful! Tx: ${tx.hash}</span>`;
+      } catch (error) {
+        console.error(error);
+        if (error.reason) {
+          claimResult.innerHTML = `<span class="text-red-500">Error: ${error.reason}</span>`;
+        } else {
+          claimResult.innerHTML = '<span class="text-red-500">Error claiming tokens. Check console for details.</span>';
+        }
+      }
+    }
+
     // Дозволити виклик функції при натисканні Enter
     document.getElementById("addressInput").addEventListener("keypress", function(event) {
       if (event.key === "Enter") {
@@ -222,6 +383,12 @@
     document.getElementById("addressesInput").addEventListener("keypress", function(event) {
       if (event.key === "Enter" && event.ctrlKey) {
         checkBulkAllocation();
+      }
+    });
+
+    document.getElementById("claimToInput").addEventListener("keypress", function(event) {
+      if (event.key === "Enter") {
+        claimTokens();
       }
     });
   </script>
