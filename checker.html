@@ -33,7 +33,7 @@
 
   <script>
     // Адреса смарт-контракту та ABI
-    const contractAddress = "0x0000000002ba96C69b95E32CAAB8fc38bAB8B3F8"; // Замініть на адресу вашого контракту
+    const contractAddress = "0x0000000002ba96C69b95E32CAAB8fc38bAB8B3F8";
     const contractABI = [
       {
         "inputs": [{"internalType":"address","name":"account","type":"address"}],
@@ -45,7 +45,7 @@
     ];
 
     // Провайдер (Base Mainnet через Infura)
-    const provider = new ethers.providers.JsonRpcProvider("https://base.llamarpc.com"); // Замініть YOUR_INFURA_API_KEY
+    const provider = new ethers.providers.JsonRpcProvider("https://base-mainnet.infura.io/v3/6203eb5601804c44b3332458a72be2fe");
     const contract = new ethers.Contract(contractAddress, contractABI, provider);
 
     async function checkAllocation() {
