@@ -10,22 +10,57 @@
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
   <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
     <h1 class="text-2xl font-bold text-center mb-4">Zora Token Allocation</h1>
-    <div class="mb-4">
-      <input
-        id="addressInput"
-        type="text"
-        placeholder="Enter Ethereum address (0x...)"
-        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+
+    <!-- Вкладки -->
+    <div class="flex border-b mb-4">
+      <button id="singleTab" class="flex-1 py-2 px-4 text-center font-semibold border-b-2 border-blue-500 text-blue-500">
+        Single Check
+      </button>
+      <button id="bulkTab" class="flex-1 py-2 px-4 text-center font-semibold border-b-2 border-transparent text-gray-500 hover:text-blue-500">
+        Bulk Check
+      </button>
     </div>
-    <button
-      id="checkButton"
-      class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-      onclick="checkAllocation()"
-    >
-      Check Allocation
-    </button>
-    <div id="result" class="mt-4 text-center"></div>
+
+    <!-- Вкладка Single Check -->
+    <div id="singleCheck" class="tab-content">
+      <div class="mb-4">
+        <input
+          id="addressInput"
+          type="text"
+          placeholder="Enter Ethereum address (0x...)"
+          class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <button
+        id="checkButton"
+        class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+        onclick="checkSingleAllocation()"
+      >
+        Check Allocation
+      </button>
+      <div id="singleResult" class="mt-4 text-center"></div>
+    </div>
+
+    <!-- Вкладка Bulk Check -->
+    <div id="bulkCheck" class="tab-content hidden">
+      <div class="mb-4">
+        <textarea
+          id="addressesInput"
+          rows="5"
+          placeholder="Enter Ethereum addresses (one per line, e.g.\n0x123...\n0x456...)"
+          class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        ></textarea>
+      </div>
+      <button
+        id="bulkCheckButton"
+        class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+        onclick="checkBulkAllocation()"
+      >
+        Check Allocations
+      </button>
+      <div id="bulkResult" class="mt-4 text-left"></div>
+    </div>
+
     <div class="mt-6 text-center text-gray-600">
       Created by <a href="https://x.com/OFreshableETH" target="_blank" class="text-blue-500 hover:underline">@OFreshableETH</a>
     </div>
@@ -41,6 +76,24 @@
         "outputs": [{"internalType":"uint256","name":"","type":"uint256"}],
         "stateMutability": "view",
         "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "token",
+        "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ];
+
+    // ABI для ERC-20 токена (тільки функція decimals())
+    const erc20ABI = [
+      {
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
       }
     ];
 
@@ -48,9 +101,49 @@
     const provider = new ethers.providers.JsonRpcProvider("https://base-mainnet.infura.io/v3/6203eb5601804c44b3332458a72be2fe");
     const contract = new ethers.Contract(contractAddress, contractABI, provider);
 
-    async function checkAllocation() {
+    // Отримання decimals токена Zora
+    let decimals = 18; // Значення за замовчуванням
+    async function fetchDecimals() {
+      try {
+        const tokenAddress = await contract.token();
+        const tokenContract = new ethers.Contract(tokenAddress, erc20ABI, provider);
+        decimals = await tokenContract.decimals();
+      } catch (error) {
+        console.error("Error fetching decimals:", error);
+      }
+    }
+
+    // Викликаємо fetchDecimals при завантаженні сторінки
+    fetchDecimals();
+
+    // Логіка вкладок
+    const singleTab = document.getElementById("singleTab");
+    const bulkTab = document.getElementById("bulkTab");
+    const singleCheck = document.getElementById("singleCheck");
+    const bulkCheck = document.getElementById("bulkCheck");
+
+    singleTab.addEventListener("click", () => {
+      singleTab.classList.add("border-blue-500", "text-blue-500");
+      singleTab.classList.remove("border-transparent", "text-gray-500");
+      bulkTab.classList.remove("border-blue-500", "text-blue-500");
+      bulkTab.classList.add("border-transparent", "text-gray-500");
+      singleCheck.classList.remove("hidden");
+      bulkCheck.classList.add("hidden");
+    });
+
+    bulkTab.addEventListener("click", () => {
+      bulkTab.classList.add("border-blue-500", "text-blue-500");
+      bulkTab.classList.remove("border-transparent", "text-gray-500");
+      singleTab.classList.remove("border-blue-500", "text-blue-500");
+      singleTab.classList.add("border-transparent", "text-gray-500");
+      bulkCheck.classList.remove("hidden");
+      singleCheck.classList.add("hidden");
+    });
+
+    // Функція для перевірки однієї адреси
+    async function checkSingleAllocation() {
       const addressInput = document.getElementById("addressInput").value;
-      const resultDiv = document.getElementById("result");
+      const resultDiv = document.getElementById("singleResult");
       resultDiv.innerHTML = "Checking...";
 
       try {
@@ -62,7 +155,7 @@
 
         // Виклик функції allocations
         const allocation = await contract.allocations(addressInput);
-        const tokens = ethers.utils.formatUnits(allocation, 18); // Конвертація з wei в токени (18 decimals)
+        const tokens = ethers.utils.formatUnits(allocation, decimals); // Використовуємо отримані decimals
 
         resultDiv.innerHTML = `<span class="text-green-600">Allocation: ${tokens} ZORA tokens</span>`;
       } catch (error) {
@@ -71,10 +164,62 @@
       }
     }
 
+    // Функція для масової перевірки адрес
+    async function checkBulkAllocation() {
+      const addressesInput = document.getElementById("addressesInput").value;
+      const resultDiv = document.getElementById("bulkResult");
+      resultDiv.innerHTML = "Checking...";
+
+      try {
+        // Розділяємо введені адреси по рядках і видаляємо порожні
+        const addresses = addressesInput.split("\n").map(addr => addr.trim()).filter(addr => addr);
+
+        if (addresses.length === 0) {
+          resultDiv.innerHTML = '<span class="text-red-500">Please enter at least one address!</span>';
+          return;
+        }
+
+        let totalTokens = 0;
+        let results = [];
+
+        // Перевіряємо кожну адресу
+        for (const address of addresses) {
+          if (!ethers.utils.isAddress(address)) {
+            results.push(`<span class="text-red-500">${address}: Invalid Ethereum address</span>`);
+            continue;
+          }
+
+          try {
+            const allocation = await contract.allocations(address);
+            const tokens = ethers.utils.formatUnits(allocation, decimals);
+            totalTokens += parseFloat(tokens);
+            results.push(`${address}: <span class="text-green-600">${tokens} ZORA tokens</span>`);
+          } catch (error) {
+            results.push(`<span class="text-red-500">${address}: Error fetching allocation</span>`);
+          }
+        }
+
+        // Формуємо результат
+        resultDiv.innerHTML = `
+          <div class="mb-2 font-semibold">Total: <span class="text-green-600">${totalTokens.toFixed(4)} ZORA tokens</span></div>
+          <div>${results.join("<br>")}</div>
+        `;
+      } catch (error) {
+        console.error(error);
+        resultDiv.innerHTML = '<span class="text-red-500">Error processing addresses. Check console for details.</span>';
+      }
+    }
+
     // Дозволити виклик функції при натисканні Enter
     document.getElementById("addressInput").addEventListener("keypress", function(event) {
       if (event.key === "Enter") {
-        checkAllocation();
+        checkSingleAllocation();
+      }
+    });
+
+    document.getElementById("addressesInput").addEventListener("keypress", function(event) {
+      if (event.key === "Enter" && event.ctrlKey) {
+        checkBulkAllocation();
       }
     });
   </script>
